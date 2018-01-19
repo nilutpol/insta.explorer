@@ -1,0 +1,231 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Instagram Server</title>
+    <!--Import Google Icon Font-->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <!--Import materialize.css-->
+    <link type="text/css" rel="stylesheet" href="libs/materialize-0.98.2/dist/css/materialize.css" media="screen,projection"
+    />
+
+    <!--Let browser know website is optimized for mobile-->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <script type="text/javascript" src="libs/jquery/jquery.min.js"></script>
+    <script type="text/javascript" src="libs/materialize-0.98.2/dist/js/materialize.js"></script>
+
+    <link type="text/css" rel="stylesheet" href="libs/hover-min.css" />
+
+    <link type="text/css" rel="stylesheet" href="libs/lightbox2/dist/css/lightbox.css" />
+    <script type="text/javascript" src="libs/lightbox2/dist/js/lightbox.js"></script>
+
+    <style>
+        body {
+            text-align: center;
+            background: rgb(171, 208, 233);
+        }
+
+        .insta-image {
+            vertical-align: middle;
+            max-width: 400px;
+            max-height: 400px;
+            display: -moz-inline-box;
+            /* Firefox 2 */
+            display: inline-block;
+            margin: 5px;
+            border: 3px solid #a9b7bb;
+            background-position: center center;
+            background-size: cover;
+        }
+    </style>
+
+</head>
+
+<body>
+    <script>
+        $(document).ready(function () {
+            $('select').material_select();
+        });
+
+    </script>
+    <script>
+        // Global variable
+        var media_count;
+        var accountId = null;
+        var username = null;
+        var cursor = null;
+        var followers_count = 0;
+
+        var throttled_get_followers = Materialize.throttle(function () {
+            get_followers(accountId, username, cursor);
+        }, 1000);
+
+        var options = [{
+            selector: "#div_result_end",
+            offset: 0,
+            callback: function () {
+                Materialize.toast("recalled", 3000);
+                throttled_get_followers();
+            },
+            done: false
+        }];
+
+        // Input: Array of JSON objects {selector, offset, callback}
+        scrollFire = function () {
+            var onScroll = function () {
+                var windowScroll = window.pageYOffset + window.innerHeight;
+
+                for (var i = 0; i < options.length; i++) {
+                    // Get options from each line
+                    var value = options[i];
+                    var selector = value.selector,
+                        offset = value.offset,
+                        callback = value.callback;
+
+                    var currentElement = document.querySelector(selector);
+                    if (currentElement !== null) {
+                        var elementOffset = currentElement.getBoundingClientRect().top + window.pageYOffset;
+
+                        if (windowScroll > (elementOffset + offset)) {
+                            if (value.done !== true) {
+                                if (typeof (callback) === 'function') {
+                                    callback.call(this, currentElement);
+                                } else if (typeof (callback) === 'string') {
+                                    var callbackFunc = new Function(callback);
+                                    callbackFunc(currentElement);
+                                }
+                                value.done = true;
+                            }
+                        }
+                    }
+                }
+            };
+
+
+            var throttledScroll = Materialize.throttle(function () {
+                onScroll();
+            }, 200);
+
+            window.addEventListener("scroll", throttledScroll);
+            window.addEventListener("resize", throttledScroll);
+
+            // perform a scan once, after current execution context, and after dom is ready
+            //setTimeout(throttledScroll, 0);
+        };
+
+        function find_user() {
+            $('#div_result').empty();
+            if ($('#div_result_main').children().length == 2) {
+                $('#div_result_main').children()[1].remove();
+            }
+            accountId = null;
+            username = null;
+            cursor = null;
+
+            var username = $("#username").val();
+
+            $.post("get_users?username=" + username)
+                .done(function (data) {
+                    var json = JSON.parse(data);
+                    var str = '';
+                    $.each(json, function (idx, value) {
+                        str += '<div class="col s2"><div class="row center">';
+                        str += '<img class = "circle responsive-img z-depth-5 hvr-pulse" src=' + value.picture + ' alt="' + value.fullName + '" onclick="get_followers(' + value.id + ',' + '\'' + value.username + '\'' + ')">';
+                        str += '<p class="center">' + value.fullName + '</p>';
+                        str += '</div></div>';
+                    });
+                    $('#div_result').append(str);
+
+                    $.each(json, function (idx, value) {
+
+                    })
+                });
+        };
+
+        function get_followers(ac, us, cur = null) {
+            accountId = ac;
+            username = us;
+            cursor = cur;
+
+            if (cursor == null) {
+                $('#div_result').empty();
+                $('#div_result').append($('#div_followers'));
+                $('#table_carries_stats tbody').empty();
+                $('#div_followers').removeClass('hiddendiv');
+                followers_count = 0;
+                scrollFire();
+            }
+
+            $.post("get_followers?accountId=" + accountId + "&username=" + username + "&cursor=" + cursor)
+                .done(function (data) {
+                    let json = JSON.parse(data);
+                    let str = '';
+                    console.log(json.data.length);
+                    for(i = 0; i < json.data.length; ++i) {
+                        // str += '<div class="col s2"><div class="row center">';
+                        // str += '<img class = "circle responsive-img z-depth-5 hvr-pulse" src=' + value.picture + ' alt="' + value.fullName + '" onclick="load_user(' + value.id + ',' + '\'' + value.username + '\'' + ')">';
+                        // str += '<p class="center">' + value.fullName + '</p>';
+                        // str += '</div></div>';
+                        let value = json.data[i];
+                        followers_count++;
+                        str += '<tr>';
+                        str += '<td>' + followers_count + '</td>';
+                        str += '<td>' + value.fullName + '</td>';
+                        str += '<td>' + value.username + '</td>';
+                        str += '</tr>';
+                    };
+
+                    $('#table_followers tbody').append(str);
+                    if (json.isMoreAvailable) {
+                        if (cursor == null) {
+                            $('#div_result_main').append('<div class="row" id="div_result_end"></div>');
+                        }
+                        Materialize.toast("More available", 1500);
+                        cursor = json.cursor;
+                        options[0].done = false;
+                    }
+                });
+        };
+
+    </script>
+    <div class="row">
+        <div class="col s12">
+            <div class="row">
+                <div class="col s6">
+                    <div class="input-field col s12">
+                        <input id="username" type="text" value="mocha guwahati">
+                        <label for="username">User Name</label>
+                    </div>
+                </div>
+                <div class="col s6" id="control_pane">
+                    <div class="col s2">
+                        <a class="waves-effect waves-light btn" id="btn_find_user" onclick="find_user()">Find User</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row" id="div_result_main">
+        <div class="row" id="div_result"></div>
+    </div>
+</body>
+
+</html>
+
+<div class="col s12 hiddendiv" id="div_followers">
+        <div class="row">
+            <table id="table_followers">
+                <thead style="font-size:12px;">
+                    <tr>
+                        <th>No.</th>
+                        <th>Name</th>
+                        <th>Username</th>
+                        <th>Followers</th>
+                        <th>Following</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>

@@ -1,0 +1,220 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Instagram Server</title>
+    <!--Import Google Icon Font-->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <!--Import materialize.css-->
+    <link type="text/css" rel="stylesheet" href="libs/materialize-0.98.2/dist/css/materialize.css" media="screen,projection"
+    />
+
+    <!--Let browser know website is optimized for mobile-->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <script type="text/javascript" src="libs/jquery/jquery.min.js"></script>
+    <script type="text/javascript" src="libs/materialize-0.98.2/dist/js/materialize.js"></script>
+
+    <link type="text/css" rel="stylesheet" href="libs/hover-min.css" />
+
+    <link type="text/css" rel="stylesheet" href="libs/lightbox2/dist/css/lightbox.css" />
+    <script type="text/javascript" src="libs/lightbox2/dist/js/lightbox.js"></script>
+
+    <style>
+        body {
+            text-align: center;
+            background: #F9D5D3;
+        }
+
+        .insta-image {
+            vertical-align: middle;
+            max-width: 400px;
+            max-height: 400px;
+            overflow: hidden;
+            display: -moz-inline-box;
+            /* Firefox 2 */
+            display: inline-block;
+            margin: 1px;
+            border: 3px solid #000000;
+            background-position: center center;
+            background-size: cover;
+        }
+    </style>
+
+</head>
+
+<body>
+    <script>
+        $(document).ready(function () {
+            $('select').material_select();
+        });
+
+    </script>
+    <script>
+        // Global variable
+        var media_count;
+        var accountId = null;
+        var username = null;
+        var cursor = null;
+
+        var throttled_get_user_media = Materialize.throttle(function () {
+            get_user_media(accountId, username, cursor);
+        }, 1000);
+
+        var options = [{
+            selector: "#div_result_end",
+            offset: 0,
+            callback: function () {
+                Materialize.toast("recalled", 3000);
+                throttled_get_user_media();
+            },
+            done: false
+        }];
+
+        // Input: Array of JSON objects {selector, offset, callback}
+        scrollFire = function () {
+            var onScroll = function () {
+                var windowScroll = window.pageYOffset + window.innerHeight;
+
+                for (var i = 0; i < options.length; i++) {
+                    // Get options from each line
+                    var value = options[i];
+                    var selector = value.selector,
+                        offset = value.offset,
+                        callback = value.callback;
+
+                    var currentElement = document.querySelector(selector);
+                    if (currentElement !== null) {
+                        var elementOffset = currentElement.getBoundingClientRect().top + window.pageYOffset;
+
+                        if (windowScroll > (elementOffset + offset)) {
+                            if (value.done !== true) {
+                                if (typeof (callback) === 'function') {
+                                    callback.call(this, currentElement);
+                                } else if (typeof (callback) === 'string') {
+                                    var callbackFunc = new Function(callback);
+                                    callbackFunc(currentElement);
+                                }
+                                value.done = true;
+                            }
+                        }
+                    }
+                }
+            };
+
+
+            var throttledScroll = Materialize.throttle(function () {
+                onScroll();
+            }, 200);
+
+            window.addEventListener("scroll", throttledScroll);
+            window.addEventListener("resize", throttledScroll);
+
+            // perform a scan once, after current execution context, and after dom is ready
+            //setTimeout(throttledScroll, 0);
+        };
+
+        function find_user() {
+            $('#div_result').empty();
+            if ($('#div_result_main').children().length == 2) {
+                $('#div_result_main').children()[1].remove();
+            }
+            accountId = null;
+            username = null;
+            cursor = null;
+
+            var username = $("#username").val();
+            get_users(username);
+        };
+
+        function get_users(username) {
+            $.post("get_users?username=" + username)
+                .done(function (data) {
+                    var json = JSON.parse(data);
+                    var str = '';
+                    $.each(json, function (idx, value) {
+                        str += '<div class="col s2"><div class="row center">';
+                        str += '<img class = "circle responsive-img z-depth-5 hvr-pulse" src=' + value.picture + ' alt="' + value.fullName + '" onclick="load_user(' + value.id + ',' + '\'' + value.username + '\'' + ')">';
+                        str += '<p class="center">' + value.fullName + '</p>';
+                        str += '</div></div>';
+                    });
+                    $('#div_result').append(str);
+                });
+        }
+
+        function load_user(ac, us, cur = null) {
+            get_user_media(ac, us, cur);
+        }
+
+        function get_user_media(ac, us, cur = null) {
+            accountId = ac;
+            username = us;
+            cursor = cur;
+            if (cursor == null) {
+                $('#div_result').empty();
+                media_count = 0;
+                scrollFire();
+            }
+
+            $.post("get_user_media?accountId=" + accountId + "&username=" + username + "&cursor=" + cursor)
+                .done(function (data) {
+                    var json = JSON.parse(data);
+                    var str = '';
+                    $.each(json.data, function (idx, value) {
+                        str += '<div class="col s3" id="div_result_' + media_count + '"><div class="row center">';
+                        if(value.videos != undefined) {
+                            if (value.videos.length > 0 && value.videos[0].length == undefined) {
+                                str += '<video controls src="' + value.videos[0].url + '" type="video/mp4" onclick="this.paused?this.play():this.pause();"></video>';
+                            } else if (value.videos.length > 0 && value.videos[0].length != undefined) {
+                                str += '<video controls src="' + value.videos[0][0].url + '" type="video/mp4" onclick="this.paused?this.play():this.pause();"></video>';
+                            }
+                        } else if(value.images != undefined) {
+                            if (value.images.length > 0 && value.images[0].length == undefined) {
+                                str += '<a href="' + value.images[0].url + '" data-lightbox="insta-media"><img class="insta-image hvr-grow-shadow" src=' + value.images[0].url + '></a>';
+                            } else if (value.images.length > 0 && value.images[0].length != undefined) {
+                                str += '<a href="' + value.images[0].url + '" data-lightbox="insta-media"><img class="insta-image hvr-grow-shadow" src=' + value.images[0][0].url + '></a>';
+                            }
+                        }
+                        //str += '<p class="center" style="font-size:8px;">' + media_count + ':' + value.caption + '</p>';
+                        str += '</div></div>';
+                        media_count++;
+                    });
+
+                    $('#div_result').append(str);
+                    /*if ($('#control_pane').children().length == 2) {
+                        $('#control_pane').children()[1].remove();
+                    }*/
+                    if (json.isMoreAvailable) {
+                        if (cursor == null) {
+                            $('#div_result_main').append('<div class="row" id="div_result_end"></div>');
+                        }
+                        Materialize.toast("More available", 1500);
+                        cursor = json.cursor;
+                        options[0].done = false;
+                    }
+                });
+        };
+    </script>
+    <div class="row">
+        <div class="col s12">
+            <div class="row">
+                <div class="col s6">
+                    <div class="input-field col s12">
+                        <input id="username" type="text" value="mocha guwahati">
+                        <label for="username">User Name</label>
+                    </div>
+                </div>
+                <div class="col s6" id="control_pane">
+                    <div class="col s2">
+                        <a class="waves-effect waves-light btn" id="btn_find_user" onclick="find_user()">Find User</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row" id="div_result_main">
+        <div class="row" id="div_result"></div>
+    </div>
+</body>
+
+</html>
