@@ -5,6 +5,9 @@
   "main": "app.js",
   "author": "Nilutpol",
   "license": "ISC",
+  "engines": {
+    "node": ">=4.3.2"
+  },
   "dependencies": {
     "express": "^4.15.2",
     "instagram-private-api": "^0.6.7",
