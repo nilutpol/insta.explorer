@@ -8,6 +8,10 @@
   "engines": {
     "node": ">=4.3.2"
   },
+  "scripts": {
+    "deploy": "gcloud app deploy",
+    "start": "node app.js"
+  },
   "dependencies": {
     "express": "^4.15.2",
     "instagram-private-api": "^0.6.7",
